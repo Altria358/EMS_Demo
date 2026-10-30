@@ -16,7 +16,7 @@ EMS 通过南向 Modbus TCP/RTU 采集和控制 PCS、BMS、电表等设备。EM
 
 SQLite 表结构：`realtime`（实时值）、`history`（趋势，含 `quality`）、`commands`（命令队列与审计）。质量码：`1` 正常、`0` 异常、`2` 陈旧、`3` 未初始化。命令状态经 `pending → done/failed` 流转。
 
-启动、排错与版本切换见 [`docs/运行手册.md`](docs/运行手册.md)。
+启动、排错与版本切换见 [`docs/运行手册.md`](docs/运行手册.md)；数据流、表结构、命令认领与接口契约见 [`docs/架构说明.md`](docs/架构说明.md)。
 
 ## Linux 依赖
 
