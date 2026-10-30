@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>EMS 储能站监控</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111d;--panel:#0e1c2b;--line:#203448;--text:#e6f0f7;--muted:#8ea4b8;--cyan:#43d9d0;--green:#42d392;--red:#ff6b78;--amber:#f5bd59}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#10283a 0,transparent 40%),var(--bg);color:var(--text);font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif}
+    header{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(18px,4vw,56px);background:#091522cc;position:sticky;top:0;backdrop-filter:blur(10px);z-index:2}
+    .brand{display:flex;align-items:center;gap:13px;font-weight:700;font-size:18px;letter-spacing:.04em}.logo{width:34px;height:34px;border:1px solid #2c777a;border-radius:10px;display:grid;place-items:center;color:var(--cyan);box-shadow:0 0 22px #43d9d022}
+    .status{display:flex;align-items:center;gap:9px;color:var(--muted)}.dot{width:9px;height:9px;border-radius:50%;background:var(--amber);box-shadow:0 0 12px currentColor}.status.ok .dot{background:var(--green)}.status.bad .dot{background:var(--red)}
+    main{max-width:1440px;margin:auto;padding:28px clamp(18px,4vw,56px) 48px}.topline{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:22px}.eyebrow{color:var(--cyan);font-size:11px;letter-spacing:.18em;text-transform:uppercase}.topline h1{margin:4px 0 0;font-size:26px}.clock{color:var(--muted);font-variant-numeric:tabular-nums}
+    .section-title{display:flex;align-items:center;gap:10px;margin:26px 0 14px;color:#b9ccda;font-size:14px}.section-title:before{content:"";width:3px;height:16px;background:var(--cyan);border-radius:3px}
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.card,.panel{background:linear-gradient(145deg,#102235,#0a1724);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 35px #0002}.card{padding:18px 19px;min-height:132px;position:relative;overflow:hidden}.card:after{content:"";position:absolute;width:100px;height:100px;right:-48px;top:-55px;border-radius:50%;background:#43d9d014}.card-head{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}.quality{font-size:11px;color:var(--green)}.quality.bad{color:var(--red)}.value{margin-top:17px;font-size:30px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.unit{margin-left:7px;color:var(--muted);font-size:13px;font-weight:400;letter-spacing:0}.device{margin-top:6px;color:#71889d;font-size:11px}
+    .panel{padding:18px 20px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}.toolbar label{color:var(--muted);font-size:12px;margin-right:8px}select,button,input{background:#0a1724;color:var(--text);border:1px solid #2a4055;border-radius:7px;padding:8px 11px;font:inherit}button{cursor:pointer;color:var(--cyan)}button:hover{border-color:var(--cyan)}button:disabled{cursor:not-allowed;opacity:.42}.chart-wrap{height:280px;position:relative}canvas{width:100%;height:100%;display:block}.chart-foot{color:var(--muted);font-size:11px;display:flex;justify-content:space-between;margin-top:8px}.empty{color:var(--muted);text-align:center;padding:35px}.error{color:var(--amber);font-size:12px;min-height:18px}.control-card{min-height:165px}.control-card .control-actions{display:flex;gap:8px;margin-top:15px;align-items:center}.control-card input{width:130px}.control-state{margin-top:9px;color:var(--muted);font-size:11px}.control-note{color:var(--amber);font-size:12px;margin:4px 0 16px}
+    @media(max-width:600px){header{height:62px}.brand{font-size:15px}.topline{align-items:start;flex-direction:column}.topline h1{font-size:22px}.clock{font-size:12px}.chart-wrap{height:230px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><div class="logo">E</div><span>储能电站监控</span></div>
+    <div id="connection" class="status"><i class="dot"></i><span>连接中</span></div>
+  </header>
+  <main>
+    <div class="topline"><div><div class="eyebrow">ENERGY STORAGE · EMS</div><h1>实时运行总览</h1></div><div id="clock" class="clock">--</div></div>
+    <div class="section-title">实时遥测 <span id="sampleInfo" style="color:#7890a5;font-weight:400;font-size:12px">每秒刷新</span></div>
+    <section id="cards" class="cards"><div class="panel empty">正在读取 EMS 数据…</div></section>
+    <div class="section-title">设备控制</div>
+    <section class="panel">
+      <div class="toolbar"><div><label for="controlToken">控制令牌</label><input id="controlToken" type="password" autocomplete="off" placeholder="输入后端配置的令牌"><button id="unlockControl">验证并解锁</button></div><span id="controlAuthState" style="color:var(--muted);font-size:12px">控制已锁定</span></div>
+      <div class="control-note">控制请求经 MQTT 发送给 EMS；EMS 执行联锁校验和 Modbus 写入后，通过 WebSocket 返回结果。设备动作请以反馈遥测为准。</div>
+      <div id="controlMessage" class="error"></div>
+      <section id="controlCards" class="cards"><div class="panel empty">正在读取控制点…</div></section>
+    </section>
+    <div class="section-title">历史趋势</div>
+    <section class="panel">
+      <div class="toolbar">
+        <div><label for="pointSelect">监测点</label><select id="pointSelect"></select></div>
+        <div><label for="rangeSelect">时间范围</label><select id="rangeSelect"><option value="1">最近 1 小时</option><option value="6">最近 6 小时</option><option value="24">最近 24 小时</option><option value="168">最近 7 天</option></select> <button id="refreshHistory">查询</button></div>
+      </div>
+      <div id="chartMessage" class="error"></div><div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <div class="chart-foot"><span id="chartCount">等待历史数据</span><span id="chartUnit"></span></div>
+    </section>
+  </main>
+<script>
+const $=id=>document.getElementById(id);let pointCache=[];let historyBusy=false;let controlToken='';let controlAuthorized=false;let controlSignature=null;let liveSocket=null;let wsRetryMs=1000;const pendingCommands=new Map();const earlyCommandResults=new Map();
+const numberFormat=new Intl.NumberFormat('zh-CN',{maximumFractionDigits:3});
+function renderCards(data){
+  window.lastLiveData=data;
+  const cards=$('cards');
+  if(!data.points||!data.points.length){cards.innerHTML='<div class="panel empty">点表中没有可显示的遥测点</div>';return;}
+  pointCache=data.points;
+  const selected=$('pointSelect').value;
+  if(!$('pointSelect').options.length){$('pointSelect').innerHTML=data.points.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.label)} · ${escapeHtml(p.id)}</option>`).join('');}
+  else if(selected){$('pointSelect').value=selected;}
+  cards.innerHTML=data.points.map(p=>`<article class="card"><div class="card-head"><span>${escapeHtml(p.label)}</span><span class="quality ${p.quality===1?'':'bad'}">${p.quality===1?'● 正常':'● '+(p.quality===0?'通信异常':p.quality===2?'数据陈旧':'未初始化')}</span></div><div class="value">${p.value===null?'--':numberFormat.format(p.value)}<span class="unit">${escapeHtml(p.unit||'')}</span></div><div class="device">${escapeHtml(p.id)}</div></article>`).join('');
+  const conn=$('connection');conn.className='status '+(data.connected?'ok':'bad');conn.querySelector('span').textContent=data.connected?'EMS 已连接':'EMS 通信异常';
+  $('sampleInfo').textContent=data.last_update_ms?`最近采集 ${new Date(data.last_update_ms).toLocaleTimeString()}`:(data.last_error||'等待采集');
+  if(!$('chartUnit').textContent) updateChartUnit();
+  renderControls(data);
+}
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function refreshLive(){try{const r=await fetch('/api/live',{cache:'no-store'});const d=await r.json();renderCards(d);}catch(e){$('connection').className='status bad';$('connection').querySelector('span').textContent='后端不可用';}}
+function handleCommandResult(command){const id=command.command_id;const result=pendingCommands.get(id);const terminal=command.status==='done'||command.status==='failed';const status=command.status==='done'?'EMS 已执行写操作':command.status==='failed'?'EMS 执行失败':command.status==='executing'?'EMS 正在执行':'命令状态：'+command.status;const message=status+(command.result?'：'+command.result:'');if(!result){earlyCommandResults.set(id,command);if(earlyCommandResults.size>100)earlyCommandResults.delete(earlyCommandResults.keys().next().value);if(command.point_id){const card=[...$('controlCards').querySelectorAll('.control-card')].find(c=>c.dataset.pointId===command.point_id);const target=card?.querySelector('[data-result]');if(target)target.textContent=message;}return;}if(terminal)pendingCommands.delete(id);result.textContent=message;}
+async function connectLiveSocket(){try{const cfgResponse=await fetch('/api/config',{cache:'no-store'});const cfg=await cfgResponse.json();if(!cfgResponse.ok)throw new Error(cfg.error||'无法读取实时通道配置');const scheme=location.protocol==='https:'?'wss:':'ws:';const socket=new WebSocket(`${scheme}//${location.hostname}:${cfg.websocket_port}/ws`);liveSocket=socket;socket.onopen=()=>{wsRetryMs=1000;};socket.onmessage=event=>{try{const message=JSON.parse(event.data);if(message.type==='live')renderCards(message.data);else if(message.type==='command_result')handleCommandResult(message.data);}catch(e){console.warn('忽略格式错误的实时消息',e);}};socket.onclose=()=>{if(liveSocket===socket)liveSocket=null;$('connection').className='status bad';$('connection').querySelector('span').textContent='实时通道重连中';setTimeout(connectLiveSocket,wsRetryMs);wsRetryMs=Math.min(wsRetryMs*2,15000);};socket.onerror=()=>socket.close();}catch(e){$('connection').className='status bad';$('connection').querySelector('span').textContent='实时通道不可用';setTimeout(connectLiveSocket,wsRetryMs);wsRetryMs=Math.min(wsRetryMs*2,15000);}}
+function selectedPoint(){return pointCache.find(p=>p.id===$('pointSelect').value);}
+function updateChartUnit(){const p=selectedPoint();$('chartUnit').textContent=p?p.unit:'';}
+function renderControls(data){
+  const points=data.controls||[],container=$('controlCards');
+  $('controlAuthState').textContent=!data.control_enabled?'后端未配置控制令牌，控制已关闭':(controlAuthorized?'令牌已验证':'控制已锁定');
+  const signature=points.map(p=>[p.id,p.type,p.label,p.min_value,p.max_value,p.scale,p.unit,p.interlock_point].join('|')).join(';');
+  if(signature!==controlSignature){
+    controlSignature=signature;
+    if(!points.length){container.innerHTML='<div class="panel empty">点表中未配置 YK / YT 控制点</div>';return;}
+    container.innerHTML=points.map(p=>{
+      let actions='';
+      if(p.type==='YK'){
+        const text=(p.name+' '+p.label).toLowerCase();
+        const labels=text.includes('breaker')?['分闸 / 断开','合闸 / 闭合']:(text.includes('start')?['停止','启动']:['写入 0','写入 1']);
+        actions=`<button data-value="0">${labels[0]}</button><button data-value="1">${labels[1]}</button>`;
+      }else{
+        const step=Math.abs(p.scale)||1;
+        actions=`<input type="number" data-command-value min="${p.min_value}" max="${p.max_value}" step="${step}" placeholder="${p.min_value} ～ ${p.max_value}"><button data-send-value>下发</button>`;
+      }
+      return `<article class="card control-card" data-point-id="${escapeHtml(p.id)}"><div class="card-head"><span>${escapeHtml(p.label)}</span><span class="quality">${escapeHtml(p.type)}</span></div><div class="device">${escapeHtml(p.device)} · FC${p.type==='YK'?5:6} 地址 ${p.south_address}</div><div class="control-actions">${actions}</div><div class="control-state" data-interlock-state></div><div class="control-state" data-result></div></article>`;
+    }).join('');
+    for(const card of container.querySelectorAll('.control-card')){
+      const id=card.dataset.pointId;
+      for(const button of card.querySelectorAll('button[data-value]'))button.addEventListener('click',()=>sendControl(id,Number(button.dataset.value)));
+      const send=card.querySelector('button[data-send-value]');
+      if(send)send.addEventListener('click',()=>{const input=card.querySelector('[data-command-value]');if(input.value===''){input.focus();return;}sendControl(id,Number(input.value));});
+    }
+  }
+  const byId=new Map(points.map(p=>[p.id,p]));
+  for(const card of container.querySelectorAll('.control-card')){
+    const p=byId.get(card.dataset.pointId);if(!p)continue;
+    const enabled=Boolean(data.connected&&data.control_enabled&&controlAuthorized&&p.interlock_ok);
+    for(const button of card.querySelectorAll('button'))button.disabled=!enabled;
+    const state=card.querySelector('[data-interlock-state]');
+    state.textContent=p.interlock_point?(p.interlock_ok?`联锁满足：${p.interlock_point} = ${p.interlock_value}`:`联锁未满足/反馈无效：${p.interlock_point} = ${p.interlock_value}`):'无附加联锁';
+    state.style.color=p.interlock_ok?'var(--muted)':'var(--amber)';
+  }
+}
+async function unlockControls(){
+  const token=$('controlToken').value.trim();if(!token){$('controlMessage').textContent='请先输入控制令牌';return;}
+  try{const response=await fetch('/api/control/status',{headers:{Authorization:'Bearer '+token},cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.error||'令牌验证失败');controlToken=token;controlAuthorized=true;$('controlMessage').textContent='控制已解锁。每次下发仍需再次确认。';if(window.lastLiveData)renderControls(window.lastLiveData);}catch(e){controlToken='';controlAuthorized=false;$('controlMessage').textContent=e.message;if(window.lastLiveData)renderControls(window.lastLiveData);}
+}
+async function sendControl(pointId,value){
+  const point=(window.lastLiveData?.controls||[]).find(p=>p.id===pointId);if(!point)return;
+  const description=`${point.label} (${point.id}) = ${value}${point.unit?' '+point.unit:''}`;
+  if(!window.confirm(`确认向 EMS 发送控制请求？\n\n${description}\n\nEMS 将再次执行点表限值和联锁校验。`))return;
+  const card=[...$('controlCards').querySelectorAll('.control-card')].find(c=>c.dataset.pointId===pointId);const result=card?.querySelector('[data-result]');if(result)result.textContent='正在发送…';
+  try{const response=await fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+controlToken},body:JSON.stringify({point_id:pointId,value})});const data=await response.json();if(!response.ok)throw new Error(data.error||'MQTT 命令发送失败');if(result)result.textContent=data.status==='delivery_unknown'?'Broker 确认超时，等待 EMS 回报，不要立即重复下发':`命令 ${data.command_id} 已发送，等待 EMS 执行结果`;$('controlMessage').textContent=data.message||`已通过 MQTT 发送控制请求：${description}`;pendingCommands.set(data.command_id,result);if(earlyCommandResults.has(data.command_id)){const previous=earlyCommandResults.get(data.command_id);earlyCommandResults.delete(data.command_id);handleCommandResult(previous);}}catch(e){if(result)result.textContent='失败：'+e.message;$('controlMessage').textContent=e.message;}
+}
+function drawChart(rows){
+  rows=rows.filter(r=>r.value!==null&&r.quality===1);
+  const canvas=$('chart'),ctx=canvas.getContext('2d'),rect=canvas.getBoundingClientRect(),ratio=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(rect.width*ratio));canvas.height=Math.max(1,Math.floor(rect.height*ratio));ctx.scale(ratio,ratio);
+  const w=rect.width,h=rect.height,pad={l:54,r:15,t:16,b:32};ctx.clearRect(0,0,w,h);
+  if(!rows.length){ctx.fillStyle='#8ea4b8';ctx.textAlign='center';ctx.fillText('该时间范围暂无历史数据',w/2,h/2);$('chartCount').textContent='0 个采样点';return;}
+  const vals=rows.map(x=>x.value),min=Math.min(...vals),max=Math.max(...vals),span=max-min||Math.max(Math.abs(max)*.1,1),lo=min-span*.08,hi=max+span*.08;
+  ctx.font='11px system-ui';ctx.strokeStyle='#203448';ctx.fillStyle='#8ea4b8';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=pad.t+(h-pad.t-pad.b)*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.textAlign='right';ctx.fillText(numberFormat.format(hi-(hi-lo)*i/4),pad.l-8,y+4);}
+  const first=rows[0].time_ms,last=rows[rows.length-1].time_ms,dx=last-first||1;
+  ctx.beginPath();rows.forEach((r,i)=>{const x=pad.l+(w-pad.l-pad.r)*(r.time_ms-first)/dx,y=pad.t+(h-pad.t-pad.b)*(hi-r.value)/(hi-lo);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.strokeStyle='#43d9d0';ctx.lineWidth=2;ctx.stroke();
+  const gradient=ctx.createLinearGradient(0,pad.t,0,h-pad.b);gradient.addColorStop(0,'#43d9d033');gradient.addColorStop(1,'#43d9d000');ctx.lineTo(w-pad.r,h-pad.b);ctx.lineTo(pad.l,h-pad.b);ctx.closePath();ctx.fillStyle=gradient;ctx.fill();
+  ctx.fillStyle='#8ea4b8';ctx.textAlign='left';ctx.fillText(new Date(first).toLocaleString(),pad.l,h-8);ctx.textAlign='right';ctx.fillText(new Date(last).toLocaleString(),w-pad.r,h-8);
+  $('chartCount').textContent=`${rows.length.toLocaleString()} 个采样点 · ${numberFormat.format(rows[rows.length-1].value)} ${selectedPoint()?.unit||''}`;
+}
+async function refreshHistory(){if(historyBusy)return;const point=selectedPoint();if(!point)return;historyBusy=true;updateChartUnit();$('chartMessage').textContent='';$('chartCount').textContent='正在查询…';try{const params=new URLSearchParams({point:point.id,hours:$('rangeSelect').value,limit:'50000'});const r=await fetch('/api/history?'+params);const d=await r.json();if(!r.ok)throw new Error(d.error||'历史查询失败');drawChart(d.rows);}catch(e){$('chartMessage').textContent=e.message;$('chartCount').textContent='历史数据暂不可用';}finally{historyBusy=false;}}
+$('refreshHistory').addEventListener('click',refreshHistory);$('pointSelect').addEventListener('change',refreshHistory);$('rangeSelect').addEventListener('change',refreshHistory);window.addEventListener('resize',()=>{if(window.lastHistoryRows)drawChart(window.lastHistoryRows);});
+$('unlockControl').addEventListener('click',unlockControls);
+const originalDraw=drawChart;drawChart=function(rows){window.lastHistoryRows=rows;originalDraw(rows);};
+function updateClock(){$('clock').textContent=new Date().toLocaleString();}updateClock();setInterval(updateClock,1000);
+if(location.protocol==='file:'){
+  $('connection').className='status bad';$('connection').querySelector('span').textContent='请通过后端地址访问';
+  $('cards').innerHTML='<div class="panel empty">当前是直接打开 HTML 文件。请先启动开发板上的网页后端，再访问 <b>http://localhost:8080</b>，不要双击 index.html。</div>';
+  $('chartMessage').textContent='历史趋势也需要通过后端 API 查询。';$('chartCount').textContent='网页后端未连接';
+}else{connectLiveSocket();setTimeout(refreshHistory,1500);}
+</script>
+</body>
+</html>
