@@ -1,26 +1,3 @@
-<<<<<<< ours
-cd ~/Qproject/C++/EMS_Demo
-cat > README.md << 'EOF'
-# EMS Gateway
-
-Modbus 主从一体 EMS 网关。
-
-## 功能
-
-- 南向：Modbus TCP/RTU 主站，采集 PCS、BMS、电表、空调
-- 北向：Modbus TCP 从站，供主机读取
-- 批量读（连续地址合并成一帧）
-- 按设备分日志
-- 自动重连（指数退避）
-- 优雅退出
-
-## 目录结构
-
-- `inc/`：头文件
-- `src/`：源文件
-- `config/`：点表、设备配置
-- `third_party/libmodbus/`：libmodbus 预编译库和源码
-=======
 # EMS Gateway
 
 EMS 通过南向 Modbus TCP/RTU 采集和控制 PCS、BMS、电表等设备。EMS 和网页后端运行在同一台 Linux 开发板上，并通过同一个本地 SQLite 文件交换实时值、历史值和控制命令；两个进程之间不建立 Modbus TCP 或 HTTP 连接。浏览器只通过 HTTP/JSON 和 WebSocket 访问网页后端。
@@ -37,7 +14,7 @@ EMS 通过南向 Modbus TCP/RTU 采集和控制 PCS、BMS、电表等设备。EM
 - `done` 表示 EMS 的 Modbus 写请求成功，不代表设备已达到目标；操作员仍应检查反馈遥测/遥信。
 - SQLite 默认保存 7 天历史，历史采样默认 60 秒；命令终态记录保留 30 天。可通过启动参数调整历史保留设置。
 
-表结构、质量码和命令状态见 [`docs/data-contract.md`](docs/data-contract.md)。
+SQLite 表结构：`realtime`（实时值）、`history`（趋势，含 `quality`）、`commands`（命令队列与审计）。质量码：`1` 正常、`0` 异常、`2` 陈旧、`3` 未初始化。命令状态经 `pending → done/failed` 流转。
 
 ## Linux 依赖
 
