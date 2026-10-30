@@ -1,0 +1,39 @@
+# 编译产物
+build/
+
+# 日志
+logs/
+*.log
+
+# 编译中间文件
+*.o
+*.obj
+
+# 编辑器
+.vscode/
+.idea/
+.venv/
+*.swp
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 第三方库的 .a 要保留
+!third_party/**/*.a
+
+# 运行时数据库与数据目录
+data/*
+# 保留 Broker 持久化目录占位，mosquitto 不会自己创建该目录
+!data/mosquitto/
+*.db
+*.db-wal
+*.db-shm
+
+# 其他构建目录（build/ 已忽略，这里补 build-*）
+build-*/
+
+# Python 缓存
+__pycache__/
+*.pyc

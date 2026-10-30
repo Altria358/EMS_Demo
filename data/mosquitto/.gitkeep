@@ -1,0 +1,2 @@
+# Mosquitto persistence directory (see config/mosquitto-ems.conf).
+# The broker does not create this directory itself; mosquitto.db is written here.
